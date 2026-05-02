@@ -14,41 +14,46 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "<h1>Bot is Active!</h1>"
+    return "Bot is Active!"
+
+def send_telegram(msg):
+    # استفاده از متد GET برای پایداری بیشتر در سرورهای رایگان
+    url = f"https://telegram.org{TOKEN}/sendMessage"
+    params = {
+        'chat_id': CHAT_ID,
+        'text': msg,
+        'parse_mode': 'Markdown'
+    }
+    try:
+        res = requests.get(url, params=params, timeout=20)
+        print(f"Telegram Status: {res.status_code}")
+        return res.status_code == 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
+
+def get_airdrops():
+    url = "https://airdrops.io"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        res = requests.get(url, headers=headers, timeout=20)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        # (بخش اسکرپینگ مشابه قبل)
+        print("Checking for new airdrops...")
+    except: pass
 
 def run():
-    # Render به پورت 10000 نیاز دارد
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
 
-def send_telegram(msg):
-    url = f"https://telegram.org{TOKEN}/sendMessage"
-    try:
-        res = requests.post(url, json={'chat_id': CHAT_ID, 'text': msg, 'parse_mode': 'Markdown'}, timeout=20)
-        print(f"--- STATUS TELEGRAM: {res.status_code} ---")
-        print(f"--- RESPONSE: {res.text} ---")
-        return res.status_code == 200
-    except Exception as e:
-        print(f"--- ERROR: {e} ---")
-        return False
-
-def check_airdrops():
-    print("Checking site...")
-    # کد اسکرپر (ساده شده برای تست)
-    send_telegram(f"🔍 ربات در حال چک کردن سایت است...\n👛 ولت: `{WALLET}`")
-
 if __name__ == "__main__":
-    # ۱. روشن کردن سرور بیدارباش
     t = Thread(target=run)
-    t.daemon = True
     t.start()
     
-    print("--- PROGRAM STARTED ---")
     time.sleep(5)
-    
-    # ۲. تست فوری تلگرام
-    send_telegram("🚀 سلام! اگر این پیام را می‌بینید یعنی اتصال برقرار است.")
+    # تست فوری - اگر این نیامد، یعنی توکن یا چت‌آیدی ایراد دارد
+    send_telegram("🚀 **تست نهایی:** اتصال برقرار شد!")
     
     while True:
-        check_airdrops()
+        get_latest_airdrops()
         time.sleep(3600)
