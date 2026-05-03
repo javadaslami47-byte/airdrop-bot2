@@ -2,83 +2,72 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import os
-from flask import Flask
 from threading import Thread
+from flask import Flask
 
-# --- تنظیمات شما ---
-TOKEN = '8740696167:AAHSCQete8X7EMDVcFovV9RBjaJnMy-KEJA'
+# اطلاعات شما که مستقیم در کد قرار داده شد
+TELEGRAM_TOKEN = '8740696167:AAHSCQete8X7EMDVcFovV9RBjaJnMy-KEJA'
 CHAT_ID = '391754544'
-WALLET = 'UQDo6vfO8kdvGNATer9nsTEki3ljoGLKoHmS2opGsafmSwxj'
-FILE_NAME = "seen_airdrops.txt"
 
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "<h1>Bot is Active!</h1>"
+    return "Bot is alive and searching for Airdrops..."
 
-def send_telegram(msg):
-    # آدرس دهی دقیق با استفاده از متغیر TOKEN
-    # نکته: نباید کلمه 'bot' را از آدرس زیر حذف کنید
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        'chat_id': CHAT_ID,
-        'text': msg,
-        'parse_mode': 'Markdown'
-    }
+def run_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def send_telegram(message):
     try:
-        # استفاده از Timeout طولانی‌تر برای جلوگیری از خطای تونل
-        res = requests.post(url, json=payload, timeout=30)
-        print(f"Telegram Log: {res.status_code} - {res.text}")
-        return res.status_code == 200
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {'chat_id': CHAT_ID, 'text': message, 'parse_mode': 'Markdown'}
+        requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        print(f"Connection Error: {e}")
-        return False
+        print(f"Error sending message: {e}")
 
-def get_latest_airdrops():
-    url = "https://airdrops.io"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+seen_airdrops = set()
+
+def check_for_airdrops():
+    print("Checking for new airdrops...")
+    url = "https://airdrops.io/latest/"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
     try:
-        if not os.path.exists(FILE_NAME):
-            with open(FILE_NAME, 'w') as f: pass
-        response = requests.get(url, headers=headers, timeout=25)
+        response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
         airdrops = soup.find_all('article', class_='air-article')
         
-        with open(FILE_NAME, 'r') as f:
-            seen_items = f.read().splitlines()
-
         for air in airdrops:
             try:
-                link_tag = air.find('div', class_='air-content').find('a')
-                name = link_tag.text.strip()
-                link = link_tag['href']
-                if name not in seen_items:
-                    msg = f"🚀 **ایردراپ جدید!**\n\n📌 پروژه: `{name}`\n👛 ولت: `{WALLET}`\n🔗 [لینک شرکت]({link})"
-                    if send_telegram(msg):
-                        with open(FILE_NAME, 'a') as f:
-                            f.write(name + "\n")
-            except: continue
-    except Exception as scrap_err:
-        print(f"Scraping failed: {scrap_err}")
+                name = air.find('div', class_='air-content').find('a').text.strip()
+                link = air.find('div', class_='air-content').find('a')['href']
+                
+                if name not in seen_airdrops:
+                    msg = f"🚀 **ایردراپ جدید پیدا شد!**\n\n📌 نام پروژه: `{name}`\n🔗 لینک بررسی: {link}\n\n✅ همین حالا اقدام کنید!"
+                    send_telegram(msg)
+                    seen_airdrops.add(name)
+                    print(f"New found: {name}")
+            except:
+                continue
+    except Exception as e:
+        print(f"Connection error: {e}")
 
-def run():
-    # تنظیم پورت برای رفع خطای Port Binding
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+def bot_loop():
+    # ارسال پیام اولیه برای اطمینان از صحت کارکرد
+    send_telegram("🤖 ربات جستجوگر شما با موفقیت روشن شد و در حال جستجو است...")
+    while True:
+        check_for_airdrops()
+        # هر ۳۰ دقیقه یکبار چک می‌کند
+        time.sleep(1800)
 
 if __name__ == "__main__":
-    # ۱. بیدار نگه داشتن سرور
-    t = Thread(target=run)
-    t.daemon = True
+    # شروع تردِ جستجوگر
+    t = Thread(target=bot_loop)
     t.start()
     
-    print("Program started...")
-    time.sleep(10) # زمان برای پایداری پورت
-    
-    # ۲. تست فوری اتصال
-    send_telegram("✅ **اتصال عمیق بررسی و اصلاح شد!** ربات اکنون فعال است.")
-    
-    while True:
-        get_latest_airdrops()
-        time.sleep(3600)
+    # شروع سرور برای جلوگیری از خاموشی Render
+    run_web_server()
